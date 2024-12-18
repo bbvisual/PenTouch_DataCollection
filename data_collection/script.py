@@ -24,8 +24,9 @@ aria.set_log_level(aria.Level.Info)
 
 class Aria:
     def __init__(self, ip, profile):
+        self.ip = ip
         self.device_config = aria.DeviceClientConfig()
-        self.device_config.ip_v4_address = ip
+        self.device_config.ip_v4_address = self.ip
 
         self.recording_config = aria.RecordingConfig()
         self.recording_config.profile_name = profile
@@ -42,15 +43,24 @@ class Aria:
 
         status = self.device.status
         # Print device status
-        print(
-            f"Aria Device Status: battery level {status.battery_level}, wifi ssid {status.wifi_ssid}, wifi ip {status.wifi_ip_address}, mode {status.device_mode}"
-        )
+        if self.ip:
+            print(
+                f"[INFO] WiFi Mode >>> Aria Device Status: battery level {status.battery_level}, wifi ssid {status.wifi_ssid}, wifi ip {status.wifi_ip_address}, mode {status.device_mode}"
+            )
+        else:
+            print(
+                f"[INFO] USB Mode >>> Aria Device Status: battery level {status.battery_level}, mode {status.device_mode}"
+            )
 
     def disconnect(self):
         self.device_client.disconnect(self.device)
         print("[INFO] Disconnected from Aria")
 
     def start_recording(self):
+        if self.is_recording():
+            print("[WARNING] Glasses are already recording. Use app to stop recording first")
+            exit(1)
+
         self.recording_manager.start_recording()
         print("[INFO] Started Aria recording")
 
@@ -71,7 +81,7 @@ class OBS:
             self.client.set_profile_parameter("Output", "FilenameFormatting", file_name)
 
         self.client.start_record()
-        print("[INFO] Started OBS recording")
+        print(f"[INFO] Started OBS recording with output {file_name}")
 
     def stop_recording(self):
         self.client.stop_record()
@@ -80,6 +90,7 @@ class OBS:
 if __name__ == "__main__":
     args = parser.parse_args()
     if args.wired:
+        print("[INFO] Using wired connection")
         args.ip = ''
 
     aria_glass = Aria(args.ip, args.profile)
@@ -87,9 +98,8 @@ if __name__ == "__main__":
 
     # Start recording on both devices
     aria_glass.start_recording()
-    if aria_glass.is_recording():
-        obs.start_recording(args.name)
-        time.sleep(1)
+    obs.start_recording(args.name)
+    time.sleep(1)
 
     # Play synchronization sound
     beepy.beep(sound=5)
