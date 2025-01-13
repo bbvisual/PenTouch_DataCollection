@@ -23,8 +23,8 @@ import numpy as np
 from tqdm import tqdm
 
 parser = argparse.ArgumentParser(description='Annotate touch frames based on green LED detection')
-parser.add_argument('-i', '--input', type=str, required=True, help='Path to the collected data folder')
-# parser.add_argument('-i', '--input', type=str, default='/Volumes/SK_APFS/Touch_Dataset/New_Dataset/Raw/Data')
+# parser.add_argument('-i', '--input', type=str, required=True, help='Path to the collected data folder')
+parser.add_argument('-i', '--input', type=str, default='/Volumes/SK_APFS/Touch_Dataset/New_Dataset/Data')
 parser.add_argument('-s', '--stream', type=str, default='webcam2', help='Stream to process (webcam1, webcam2, aria)')
 parser.add_argument('-d', '--debug', action='store_true', help='Debug mode, will create a manual verification folder')
 
@@ -127,7 +127,7 @@ for vid in sorted(all_videos):
 
     res = {'bbox': None, 'annotations': {}}
     if len(all_frames) < 3:
-            print("Not enough frames to select from.")
+            print(f"Not enough frames to select from. Num frames: {len(all_frames)}")
             continue
 
     if args.debug:

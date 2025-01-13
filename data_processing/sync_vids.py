@@ -9,8 +9,8 @@ After manually syncing the frames:
     - webcam2 <-> screen using on screen UNIX timestamp or audio (less accurate)
     - And have start frame number for webcam2 -> to truncate the beginning synchronization frames.
 -> Have a csv file with the following structure:
-[Participant, Task, Start_Webcam2_Frame, Start_Aria_Frame, Start_Screen_Frame]
-E.g: Dec30,P1,T1,560,560,0
+[Participant, Task, Start_Webcam2_Frame, Start_Aria_Frame, Start_Screen_Frame, End_Screen_Frame]
+E.g: Dec30,P1,T1,560,560,0,-1
 
 Screen frame sometimes is not available (corrupted file, still fixing) -> set to 0 to ignore.
 
@@ -19,13 +19,13 @@ The script will create a synced rgb_frames and videos folder in a similar struct
 │   ├── T1
 │   │   ├── rgb_frames
 │   │   │   ├── aria
-│   │   │   │   └── 00000000.png ...
+│   │   │   │   └── 00000000.jpg ...
 │   │   │   ├── combined
-│   │   │   │   └── 00000000.png ...
+│   │   │   │   └── 00000000.jpg ...
 │   │   │   ├── webcam1
-│   │   │   │   └── 00000000.png ...
+│   │   │   │   └── 00000000.jpg ...
 │   │   │   └── webcam2
-│   │   │       └── 00000000.png ...
+│   │   │       └── 00000000.jpg ...
 │   │   └── videos
 │   │       ├── aria.mp4
 │   │       ├── combined.mp4
@@ -45,16 +45,16 @@ import cv2
 import numpy as np
 
 parser = argparse.ArgumentParser(description='Sync videos and frames')
-parser.add_argument('-i', '--input', type=str, required=True, help='Path to the collected data folder')
-parser.add_argument('-o', '--output', type=str, required=True, help='Path to the output folder')
-parser.add_argument('-c', '--csv', type=str, required=True, help='Path to the CSV file')
+parser.add_argument('-i', '--input', type=str, required=False, help='Path to the collected raw data folder')
+parser.add_argument('-o', '--output', type=str, required=False, help='Path to the output folder')
+parser.add_argument('-c', '--csv', type=str, required=False, help='Path to the CSV file')
 
 args = parser.parse_args()
 
 # for manual run or debugging
-# args.input = ''
-# args.output = ''
-# args.csv = ''
+args.input = '/Volumes/SK_APFS/Touch_Dataset/New_Dataset/Raw'
+args.output = '/Volumes/SK_APFS/Touch_Dataset/New_Dataset/Data'
+args.csv = '/Volumes/SK_APFS/Touch_Dataset/New_Dataset/Raw/manual_sync.csv'
 
 def create_video(out_path, frames):
     print(f'Creating video: {out_path}')
@@ -77,7 +77,7 @@ def create_video(out_path, frames):
 def copy_frame(out_path, frames):
     print(f'Copying frames to: {out_path}')
     for i, frame in enumerate(frames):
-        destination = os.path.join(out_path, f'{i:08d}.png')
+        destination = os.path.join(out_path, f'{i:08d}.jpg')
         shutil.copy(frame, destination)
 
     return frames
@@ -111,10 +111,15 @@ with open(args.csv, mode='r') as file:
 
     # Iterate through the rows
     for row in csv_reader:
-        base_path = os.path.join(*([args.input], row[:3] + ['frames']))
-        print(f'Processing {base_path}...')
-
+        base_path = os.path.join(*([args.input] + row[:3] + ['frames']))
         desc_path = os.path.join(*([args.output] + row[1:3]))
+        print('-'*80)
+        if os.path.exists(desc_path):
+            print(f'Folder {desc_path} already exists. Skipping...')
+            continue
+        else:
+            print(f'Processing {base_path}...')
+
         desc_video_path = os.path.join(desc_path, 'videos')
         desc_frame_path = os.path.join(desc_path, 'rgb_frames')
 
@@ -131,13 +136,21 @@ with open(args.csv, mode='r') as file:
         all_aria = [os.path.join(base_path, 'aria', x) for x in sorted(os.listdir(os.path.join(base_path, "aria")))]
         all_screen = [os.path.join(base_path, 'screen', x) for x in sorted(os.listdir(os.path.join(base_path, "screen")))]
 
-        start_webcam2, start_aria, start_screen = map(int, row[3:6])
-        print(f'Start webcam2: {start_webcam2}, Start aria: {start_aria}, Start screen: {start_screen}')
+        start_webcam2, start_aria, start_screen, end_webcam2 = map(int, row[3:7])
+        # Handle if there is end webcam2 screen annotation
+        if end_webcam2 == 0:
+            n_webcam2_frames = len(all_webcam2)
+        else:
+            n_webcam2_frames = min(len(all_webcam2), end_webcam2)
+
+        print(f'Start webcam2: {start_webcam2}, End webcam2: {end_webcam2}, Start aria: {start_aria}, Start screen: {start_screen}')
+
         if start_screen == 0:
-            num_frames = min(len(all_webcam2) - start_webcam2, len(all_aria) - start_aria)
+            # Sync frame for screen is not available.
+            num_frames = min(n_webcam2_frames - start_webcam2, len(all_aria) - start_aria)
             screen_frames = None
         else:
-            num_frames = min(len(all_webcam2) - start_webcam2, len(all_aria) - start_aria, len(all_screen) - start_screen)
+            num_frames = min(n_webcam2_frames - start_webcam2, len(all_aria) - start_aria, len(all_screen) - start_screen)
             screen_frames = create_video(os.path.join(desc_video_path, 'screen.mp4'), all_screen[start_screen:start_screen+num_frames])
             copy_frame(os.path.join(desc_frame_path, 'screen'), screen_frames)
 
